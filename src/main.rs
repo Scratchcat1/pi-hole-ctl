@@ -48,6 +48,11 @@ enum Commands {
         #[clap(parse(try_from_str = parse_duration), default_value = "60s")]
         duration: Duration,
     },
+    Summary,
+    SummaryRaw,
+    OverTime10Min,
+    Version,
+    Versions,
 }
 
 fn parse_duration(arg: &str) -> Result<std::time::Duration, humantime::DurationError> {
@@ -70,6 +75,10 @@ where
         let serialised_json =
             serde_json::to_string_pretty(&map).expect("Unable to serialise results to JSON");
         println!("{}", serialised_json);
+
+        // let serialised_yaml =
+        //     serde_yaml::to_string(&map).expect("Unable to serialise results to YAML");
+        // println!("{}", serialised_yaml);
     } else {
         for (result, host) in results.zip(hosts.iter()) {
             println!("{}: {:?}", host.as_ref(), result);
@@ -116,6 +125,50 @@ fn main() {
             let results = apis.iter().map(|api| {
                 api.get_authenticated_api()
                     .and_then(|auth_api| auth_api.disable(duration.as_secs()))
+                    .map_err(|e| format!("{:?}", e))
+            });
+            display(results, &opts.hosts, opts.json)
+        }
+        Commands::Summary => {
+            let results = apis.iter().map(|api| {
+                api.get_unauthenticated_api()
+                    .and_then(|unauth_api| unauth_api.get_summary())
+                    .map_err(|e| format!("{:?}", e))
+            });
+            display(results, &opts.hosts, opts.json)
+        }
+
+        Commands::SummaryRaw => {
+            let results = apis.iter().map(|api| {
+                api.get_unauthenticated_api()
+                    .and_then(|unauth_api| unauth_api.get_summary_raw())
+                    .map_err(|e| format!("{:?}", e))
+            });
+            display(results, &opts.hosts, opts.json)
+        }
+
+        Commands::OverTime10Min => {
+            let results = apis.iter().map(|api| {
+                api.get_unauthenticated_api()
+                    .and_then(|unauth_api| unauth_api.get_over_time_data_10_mins())
+                    .map_err(|e| format!("{:?}", e))
+            });
+            display(results, &opts.hosts, opts.json)
+        }
+
+        Commands::Version => {
+            let results = apis.iter().map(|api| {
+                api.get_unauthenticated_api()
+                    .and_then(|unauth_api| unauth_api.get_version())
+                    .map_err(|e| format!("{:?}", e))
+            });
+            display(results, &opts.hosts, opts.json)
+        }
+
+        Commands::Versions => {
+            let results = apis.iter().map(|api| {
+                api.get_unauthenticated_api()
+                    .and_then(|unauth_api| unauth_api.get_versions())
                     .map_err(|e| format!("{:?}", e))
             });
             display(results, &opts.hosts, opts.json)
