@@ -1,63 +1,12 @@
 mod api_util;
+mod commands;
 mod config;
 use crate::api_util::PiHoleConfigImplementation;
 use crate::config::HostKeyPair;
-use clap::{Parser, Subcommand};
-use pi_hole_api::{
-    AuthenticatedPiHoleAPI, PiHoleAPIConfig, PiHoleAPIConfigWithKey, UnauthenticatedPiHoleAPI,
-};
+use clap::Parser;
+use commands::{CnameCommands, Commands, DNSCommands, ListCommands, PiHoleCtlOptions};
 use serde::Serialize;
 use std::collections::HashMap;
-use std::path::PathBuf;
-use std::time::Duration;
-
-#[derive(Parser, Debug)]
-#[clap(author, version, about, long_about = None)]
-struct PiHoleCtlOptions {
-    /// print help message
-    #[clap(short, long)]
-    help: bool,
-
-    /// Be verbose
-    #[clap(short, long)]
-    verbose: bool,
-
-    /// Output as JSON
-    #[clap(short, long)]
-    json: bool,
-
-    /// Pairs of hosts/keys
-    #[clap(long)]
-    hosts: Vec<String>,
-
-    /// Path to config file
-    #[clap(short, long)]
-    config_file_path: Option<PathBuf>,
-
-    #[clap(long)]
-    keys: Vec<String>,
-
-    #[clap(subcommand)]
-    command: Commands,
-}
-
-#[derive(Debug, Subcommand)]
-enum Commands {
-    Enable,
-    Disable {
-        #[clap(parse(try_from_str = parse_duration), default_value = "60s")]
-        duration: Duration,
-    },
-    Summary,
-    SummaryRaw,
-    OverTime10Min,
-    Version,
-    Versions,
-}
-
-fn parse_duration(arg: &str) -> Result<std::time::Duration, humantime::DurationError> {
-    arg.parse::<humantime::Duration>().map(Into::into)
-}
 
 fn display<T, I, H>(results: I, hosts: &[H], json: bool)
 where
@@ -89,13 +38,19 @@ where
 fn main() {
     // Parse the command line options
     let mut opts = PiHoleCtlOptions::parse();
-    println!("{:#?}", opts);
+    if opts.verbose {
+        println!("{:#?}", opts);
+    }
 
     // Load config and extend hosts and keys
     let config = config::get_config_file(&opts.config_file_path);
     for HostKeyPair { host, key } in config.hosts {
-        opts.hosts.push(host);
-        opts.keys.push(key.unwrap_or("".to_string()));
+        opts.hosts.push(host.clone());
+        opts.keys.push(key.clone().unwrap_or("".to_string()));
+
+        if opts.verbose {
+            println!("Adding host: {host} with key: {key:?}");
+        }
     }
 
     let apis: Vec<PiHoleConfigImplementation> = opts
@@ -169,6 +124,203 @@ fn main() {
             let results = apis.iter().map(|api| {
                 api.get_unauthenticated_api()
                     .and_then(|unauth_api| unauth_api.get_versions())
+                    .map_err(|e| format!("{:?}", e))
+            });
+            display(results, &opts.hosts, opts.json)
+        }
+
+        Commands::TopItems { count } => {
+            let results = apis.iter().map(|api| {
+                api.get_authenticated_api()
+                    .and_then(|auth_api| auth_api.get_top_items(count))
+                    .map_err(|e| format!("{:?}", e))
+            });
+            display(results, &opts.hosts, opts.json)
+        }
+
+        Commands::TopClients { count } => {
+            let results = apis.iter().map(|api| {
+                api.get_authenticated_api()
+                    .and_then(|auth_api| auth_api.get_top_clients(count))
+                    .map_err(|e| format!("{:?}", e))
+            });
+            display(results, &opts.hosts, opts.json)
+        }
+
+        Commands::TopClientsBlocked { count } => {
+            let results = apis.iter().map(|api| {
+                api.get_authenticated_api()
+                    .and_then(|auth_api| auth_api.get_top_clients_blocked(count))
+                    .map_err(|e| format!("{:?}", e))
+            });
+            display(results, &opts.hosts, opts.json)
+        }
+
+        Commands::ForwardDestinations { unsorted } => {
+            let results = apis.iter().map(|api| {
+                api.get_authenticated_api()
+                    .and_then(|auth_api| auth_api.get_forward_destinations(unsorted))
+                    .map_err(|e| format!("{:?}", e))
+            });
+            display(results, &opts.hosts, opts.json)
+        }
+
+        Commands::QueryTypes => {
+            let results = apis.iter().map(|api| {
+                api.get_authenticated_api()
+                    .and_then(|auth_api| auth_api.get_query_types())
+                    .map_err(|e| format!("{:?}", e))
+            });
+            display(results, &opts.hosts, opts.json)
+        }
+
+        Commands::AllQueries { count } => {
+            let results = apis.iter().map(|api| {
+                api.get_authenticated_api()
+                    .and_then(|auth_api| auth_api.get_all_queries(count))
+                    .map_err(|e| format!("{:?}", e))
+            });
+            display(results, &opts.hosts, opts.json)
+        }
+
+        Commands::Cache => {
+            let results = apis.iter().map(|api| {
+                api.get_authenticated_api()
+                    .and_then(|auth_api| auth_api.get_cache_info())
+                    .map_err(|e| format!("{:?}", e))
+            });
+            display(results, &opts.hosts, opts.json)
+        }
+        Commands::ClientNames => {
+            let results = apis.iter().map(|api| {
+                api.get_authenticated_api()
+                    .and_then(|auth_api| auth_api.get_client_names())
+                    .map_err(|e| format!("{:?}", e))
+            });
+            display(results, &opts.hosts, opts.json)
+        }
+        Commands::OverTimeDataClients => {
+            let results = apis.iter().map(|api| {
+                api.get_authenticated_api()
+                    .and_then(|auth_api| auth_api.get_over_time_data_clients())
+                    .map_err(|e| format!("{:?}", e))
+            });
+            display(results, &opts.hosts, opts.json)
+        }
+
+        Commands::Network => {
+            let results = apis.iter().map(|api| {
+                api.get_authenticated_api()
+                    .and_then(|auth_api| auth_api.get_network())
+                    .map_err(|e| format!("{:?}", e))
+            });
+            display(results, &opts.hosts, opts.json)
+        }
+
+        Commands::QueriesCount => {
+            let results = apis.iter().map(|api| {
+                api.get_authenticated_api()
+                    .and_then(|auth_api| auth_api.get_queries_count())
+                    .map_err(|e| format!("{:?}", e))
+            });
+            display(results, &opts.hosts, opts.json)
+        }
+
+        Commands::List { list, command } => match command {
+            ListCommands::Show => {
+                let results = apis.iter().map(|api| {
+                    api.get_authenticated_api()
+                        .and_then(|auth_api| auth_api.list_get_domains(&list))
+                        .map_err(|e| format!("{:?}", e))
+                });
+                display(results, &opts.hosts, opts.json)
+            }
+            ListCommands::Add { domain } => {
+                let results = apis.iter().map(|api| {
+                    api.get_authenticated_api()
+                        .and_then(|auth_api| auth_api.list_add(&domain, &list))
+                        .map_err(|e| format!("{:?}", e))
+                });
+                display(results, &opts.hosts, opts.json)
+            }
+            ListCommands::Remove { domain } => {
+                let results = apis.iter().map(|api| {
+                    api.get_authenticated_api()
+                        .and_then(|auth_api| auth_api.list_remove(&domain, &list))
+                        .map_err(|e| format!("{:?}", e))
+                });
+                display(results, &opts.hosts, opts.json)
+            }
+        },
+
+        Commands::DNS { command } => match command {
+            DNSCommands::Show => {
+                let results = apis.iter().map(|api| {
+                    api.get_authenticated_api()
+                        .and_then(|auth_api| auth_api.get_custom_dns_records())
+                        .map_err(|e| format!("{:?}", e))
+                });
+                display(results, &opts.hosts, opts.json)
+            }
+            DNSCommands::Add { ip, domain } => {
+                let results = apis.iter().map(|api| {
+                    api.get_authenticated_api()
+                        .and_then(|auth_api| auth_api.add_custom_dns_record(ip, &domain))
+                        .map_err(|e| format!("{:?}", e))
+                });
+                display(results, &opts.hosts, opts.json)
+            }
+            DNSCommands::Remove { ip, domain } => {
+                let results = apis.iter().map(|api| {
+                    api.get_authenticated_api()
+                        .and_then(|auth_api| auth_api.delete_custom_dns_record(ip, &domain))
+                        .map_err(|e| format!("{:?}", e))
+                });
+                display(results, &opts.hosts, opts.json)
+            }
+        },
+
+        Commands::Cname { command } => match command {
+            CnameCommands::Show => {
+                let results = apis.iter().map(|api| {
+                    api.get_authenticated_api()
+                        .and_then(|auth_api| auth_api.get_custom_cname_records())
+                        .map_err(|e| format!("{:?}", e))
+                });
+                display(results, &opts.hosts, opts.json)
+            }
+            CnameCommands::Add {
+                domain,
+                target_domain,
+            } => {
+                let results = apis.iter().map(|api| {
+                    api.get_authenticated_api()
+                        .and_then(|auth_api| {
+                            auth_api.add_custom_cname_record(&domain, &target_domain)
+                        })
+                        .map_err(|e| format!("{:?}", e))
+                });
+                display(results, &opts.hosts, opts.json)
+            }
+            CnameCommands::Remove {
+                domain,
+                target_domain,
+            } => {
+                let results = apis.iter().map(|api| {
+                    api.get_authenticated_api()
+                        .and_then(|auth_api| {
+                            auth_api.delete_custom_cname_record(&domain, &target_domain)
+                        })
+                        .map_err(|e| format!("{:?}", e))
+                });
+                display(results, &opts.hosts, opts.json)
+            }
+        },
+
+        Commands::Logage => {
+            let results = apis.iter().map(|api| {
+                api.get_authenticated_api()
+                    .and_then(|auth_api| auth_api.get_max_logage())
                     .map_err(|e| format!("{:?}", e))
             });
             display(results, &opts.hosts, opts.json)
