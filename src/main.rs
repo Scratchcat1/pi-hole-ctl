@@ -59,13 +59,13 @@ where
             })
             .collect::<Vec<(String, R)>>();
         println!("{}", table_rows.to_table().display().unwrap());
-        println!("Errors:");
-        for error in errors {
-            println!("{}", error);
+
+        if !errors.is_empty() {
+            println!("Errors:");
+            for error in errors {
+                println!("{}", error);
+            }
         }
-        // for (result, host) in results.zip(hosts.iter()) {
-        //     println!("{}: {:?}", host.as_ref(), result);
-        // }
     }
 }
 

@@ -1,4 +1,4 @@
-use cli_table::{Cell, CellStruct, Table, TableStruct};
+use cli_table::{Cell, CellStruct, Color, Style, Table, TableStruct};
 use pi_hole_api::api_types::*;
 
 pub trait ToTableRows {
@@ -118,10 +118,14 @@ impl ToTableRows for OverTimeData {
             .domains_over_time
             .into_iter()
             .map(|(time, count)| vec![host.cell(), "all".cell(), time.cell(), count.cell()]);
-        let ads_over_time = self
-            .ads_over_time
-            .into_iter()
-            .map(|(time, count)| vec![host.cell(), "ads".cell(), time.cell(), count.cell()]);
+        let ads_over_time = self.ads_over_time.into_iter().map(|(time, count)| {
+            vec![
+                host.cell(),
+                "ads".cell().foreground_color(Some(Color::Red)),
+                time.cell(),
+                count.cell(),
+            ]
+        });
 
         domains_over_time.chain(ads_over_time).collect()
     }
@@ -158,7 +162,10 @@ impl ToTableRows for QueryTypes {
 
 impl ToTableRows for Status {
     fn to_table_rows(self, host: &str) -> Vec<Vec<CellStruct>> {
-        vec![vec![host.cell(), self.status.cell()]]
+        vec![vec![
+            host.cell(),
+            string_status_to_colored_cell(&self.status),
+        ]]
     }
 }
 
@@ -181,7 +188,7 @@ impl ToTableRows for Summary {
             self.reply_cname.cell(),
             self.reply_ip.cell(),
             self.privacy_level.cell(),
-            self.status.cell(),
+            string_status_to_colored_cell(&self.status),
         ]]
     }
 }
@@ -205,7 +212,7 @@ impl ToTableRows for SummaryRaw {
             self.reply_cname.cell(),
             self.reply_ip.cell(),
             self.privacy_level.cell(),
-            self.status.cell(),
+            string_status_to_colored_cell(&self.status),
         ]]
     }
 }
@@ -230,14 +237,22 @@ impl ToTableRows for TopClientsBlocked {
 
 impl ToTableRows for TopItems {
     fn to_table_rows(self, host: &str) -> Vec<Vec<CellStruct>> {
-        let top_queries = self
-            .top_queries
-            .into_iter()
-            .map(|(domain, count)| vec![host.cell(), "ok".cell(), domain.cell(), count.cell()]);
-        let top_ads = self
-            .top_ads
-            .into_iter()
-            .map(|(domain, count)| vec![host.cell(), "ad".cell(), domain.cell(), count.cell()]);
+        let top_queries = self.top_queries.into_iter().map(|(domain, count)| {
+            vec![
+                host.cell(),
+                "ok".cell().foreground_color(Some(Color::Green)),
+                domain.cell(),
+                count.cell(),
+            ]
+        });
+        let top_ads = self.top_ads.into_iter().map(|(domain, count)| {
+            vec![
+                host.cell(),
+                "ad".cell().foreground_color(Some(Color::Red)),
+                domain.cell(),
+                count.cell(),
+            ]
+        });
 
         top_queries.chain(top_ads).collect()
     }
@@ -278,6 +293,15 @@ where
             .flat_map(|item| item.to_table_rows(host))
             .collect()
     }
+}
+
+fn string_status_to_colored_cell(status: &str) -> CellStruct {
+    let color = if status == "enabled" {
+        Color::Green
+    } else {
+        Color::Red
+    };
+    status.cell().foreground_color(Some(color))
 }
 
 pub trait ToTableTitle {
