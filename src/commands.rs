@@ -102,9 +102,9 @@ pub enum Commands {
         command: ListCommands,
     },
     /// Custom DNS records
-    DNS {
+    Dns {
         #[clap(subcommand)]
-        command: DNSCommands,
+        command: DnsCommands,
     },
     /// Custom DNS records
     Cname {
@@ -129,7 +129,7 @@ pub enum ListCommands {
 }
 
 #[derive(Debug, Subcommand)]
-pub enum DNSCommands {
+pub enum DnsCommands {
     Show,
     Add {
         /// IP address

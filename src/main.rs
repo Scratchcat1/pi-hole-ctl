@@ -1,25 +1,36 @@
+mod api_type_wrappers;
 mod api_util;
 mod commands;
 mod config;
+mod table;
+use crate::api_type_wrappers::*;
 use crate::api_util::PiHoleConfigImplementation;
 use crate::config::HostKeyPair;
+use crate::table::{ToTable, ToTableRows, ToTableTitle};
 use clap::Parser;
-use commands::{CnameCommands, Commands, DNSCommands, ListCommands, PiHoleCtlOptions};
+use commands::{CnameCommands, Commands, DnsCommands, ListCommands, PiHoleCtlOptions};
+use pi_hole_api::errors::APIError;
 use serde::Serialize;
 use std::collections::HashMap;
 
-fn display<T, I, H>(results: I, hosts: &[H], json: bool)
+fn display<I, H, R>(results: I, hosts: &[H], json: bool)
 where
-    I: Iterator<Item = T>,
+    I: Iterator<Item = Result<R, APIError>>,
     // I::Item: T,
-    T: std::fmt::Debug + Serialize,
+    // T: Result<R, APIError>,
+    R: std::fmt::Debug + Serialize + ToTableRows + ToTableTitle,
     H: AsRef<str>,
 {
     if json {
-        let map: HashMap<String, T> = hosts
+        let map: HashMap<String, Result<R, String>> = hosts
             .iter()
             .zip(results)
-            .map(|(host, result)| (host.as_ref().to_owned(), result))
+            .map(|(host, result)| {
+                (
+                    host.as_ref().to_owned(),
+                    result.map_err(|e| format!("{:?}", e)),
+                )
+            })
             .collect();
         let serialised_json =
             serde_json::to_string_pretty(&map).expect("Unable to serialise results to JSON");
@@ -29,9 +40,32 @@ where
         //     serde_yaml::to_string(&map).expect("Unable to serialise results to YAML");
         // println!("{}", serialised_yaml);
     } else {
-        for (result, host) in results.zip(hosts.iter()) {
-            println!("{}: {:?}", host.as_ref(), result);
+        let results: Vec<Result<R, APIError>> = results.collect();
+        let errors = hosts
+            .iter()
+            .zip(&results)
+            .filter_map(|(host, result)| match result {
+                Ok(_) => None,
+                Err(e) => Some((host, e)),
+            })
+            .map(|(host, error)| format!("{}: {:?}", host.as_ref(), error))
+            .collect::<Vec<String>>();
+        let table_rows = hosts
+            .iter()
+            .zip(results)
+            .filter_map(|(host, result)| match result {
+                Ok(ok) => Some((host.as_ref().to_owned(), ok)),
+                Err(_) => None,
+            })
+            .collect::<Vec<(String, R)>>();
+        println!("{}", table_rows.to_table().display().unwrap());
+        println!("Errors:");
+        for error in errors {
+            println!("{}", error);
         }
+        // for (result, host) in results.zip(hosts.iter()) {
+        //     println!("{}: {:?}", host.as_ref(), result);
+        // }
     }
 }
 
@@ -46,7 +80,7 @@ fn main() {
     let config = config::get_config_file(&opts.config_file_path);
     for HostKeyPair { host, key } in config.hosts {
         opts.hosts.push(host.clone());
-        opts.keys.push(key.clone().unwrap_or("".to_string()));
+        opts.keys.push(key.clone().unwrap_or_default());
 
         if opts.verbose {
             println!("Adding host: {host} with key: {key:?}");
@@ -72,7 +106,6 @@ fn main() {
             let results = apis.iter().map(|api| {
                 api.get_authenticated_api()
                     .and_then(|auth_api| auth_api.enable())
-                    .map_err(|e| format!("{:?}", e))
             });
             display(results, &opts.hosts, opts.json)
         }
@@ -80,7 +113,6 @@ fn main() {
             let results = apis.iter().map(|api| {
                 api.get_authenticated_api()
                     .and_then(|auth_api| auth_api.disable(duration.as_secs()))
-                    .map_err(|e| format!("{:?}", e))
             });
             display(results, &opts.hosts, opts.json)
         }
@@ -88,7 +120,6 @@ fn main() {
             let results = apis.iter().map(|api| {
                 api.get_unauthenticated_api()
                     .and_then(|unauth_api| unauth_api.get_summary())
-                    .map_err(|e| format!("{:?}", e))
             });
             display(results, &opts.hosts, opts.json)
         }
@@ -97,7 +128,6 @@ fn main() {
             let results = apis.iter().map(|api| {
                 api.get_unauthenticated_api()
                     .and_then(|unauth_api| unauth_api.get_summary_raw())
-                    .map_err(|e| format!("{:?}", e))
             });
             display(results, &opts.hosts, opts.json)
         }
@@ -106,7 +136,6 @@ fn main() {
             let results = apis.iter().map(|api| {
                 api.get_unauthenticated_api()
                     .and_then(|unauth_api| unauth_api.get_over_time_data_10_mins())
-                    .map_err(|e| format!("{:?}", e))
             });
             display(results, &opts.hosts, opts.json)
         }
@@ -115,7 +144,7 @@ fn main() {
             let results = apis.iter().map(|api| {
                 api.get_unauthenticated_api()
                     .and_then(|unauth_api| unauth_api.get_version())
-                    .map_err(|e| format!("{:?}", e))
+                    .map(VersionWrapper)
             });
             display(results, &opts.hosts, opts.json)
         }
@@ -124,7 +153,6 @@ fn main() {
             let results = apis.iter().map(|api| {
                 api.get_unauthenticated_api()
                     .and_then(|unauth_api| unauth_api.get_versions())
-                    .map_err(|e| format!("{:?}", e))
             });
             display(results, &opts.hosts, opts.json)
         }
@@ -133,7 +161,6 @@ fn main() {
             let results = apis.iter().map(|api| {
                 api.get_authenticated_api()
                     .and_then(|auth_api| auth_api.get_top_items(count))
-                    .map_err(|e| format!("{:?}", e))
             });
             display(results, &opts.hosts, opts.json)
         }
@@ -142,7 +169,6 @@ fn main() {
             let results = apis.iter().map(|api| {
                 api.get_authenticated_api()
                     .and_then(|auth_api| auth_api.get_top_clients(count))
-                    .map_err(|e| format!("{:?}", e))
             });
             display(results, &opts.hosts, opts.json)
         }
@@ -151,7 +177,6 @@ fn main() {
             let results = apis.iter().map(|api| {
                 api.get_authenticated_api()
                     .and_then(|auth_api| auth_api.get_top_clients_blocked(count))
-                    .map_err(|e| format!("{:?}", e))
             });
             display(results, &opts.hosts, opts.json)
         }
@@ -160,7 +185,6 @@ fn main() {
             let results = apis.iter().map(|api| {
                 api.get_authenticated_api()
                     .and_then(|auth_api| auth_api.get_forward_destinations(unsorted))
-                    .map_err(|e| format!("{:?}", e))
             });
             display(results, &opts.hosts, opts.json)
         }
@@ -169,7 +193,6 @@ fn main() {
             let results = apis.iter().map(|api| {
                 api.get_authenticated_api()
                     .and_then(|auth_api| auth_api.get_query_types())
-                    .map_err(|e| format!("{:?}", e))
             });
             display(results, &opts.hosts, opts.json)
         }
@@ -178,7 +201,6 @@ fn main() {
             let results = apis.iter().map(|api| {
                 api.get_authenticated_api()
                     .and_then(|auth_api| auth_api.get_all_queries(count))
-                    .map_err(|e| format!("{:?}", e))
             });
             display(results, &opts.hosts, opts.json)
         }
@@ -187,7 +209,6 @@ fn main() {
             let results = apis.iter().map(|api| {
                 api.get_authenticated_api()
                     .and_then(|auth_api| auth_api.get_cache_info())
-                    .map_err(|e| format!("{:?}", e))
             });
             display(results, &opts.hosts, opts.json)
         }
@@ -195,7 +216,6 @@ fn main() {
             let results = apis.iter().map(|api| {
                 api.get_authenticated_api()
                     .and_then(|auth_api| auth_api.get_client_names())
-                    .map_err(|e| format!("{:?}", e))
             });
             display(results, &opts.hosts, opts.json)
         }
@@ -203,7 +223,9 @@ fn main() {
             let results = apis.iter().map(|api| {
                 api.get_authenticated_api()
                     .and_then(|auth_api| auth_api.get_over_time_data_clients())
-                    .map_err(|e| format!("{:?}", e))
+                    .map(|over_time_data_clients| {
+                        OverTimeDataClientsWrapper(over_time_data_clients)
+                    })
             });
             display(results, &opts.hosts, opts.json)
         }
@@ -212,7 +234,6 @@ fn main() {
             let results = apis.iter().map(|api| {
                 api.get_authenticated_api()
                     .and_then(|auth_api| auth_api.get_network())
-                    .map_err(|e| format!("{:?}", e))
             });
             display(results, &opts.hosts, opts.json)
         }
@@ -221,7 +242,7 @@ fn main() {
             let results = apis.iter().map(|api| {
                 api.get_authenticated_api()
                     .and_then(|auth_api| auth_api.get_queries_count())
-                    .map_err(|e| format!("{:?}", e))
+                    .map(QueriesCountWrapper)
             });
             display(results, &opts.hosts, opts.json)
         }
@@ -231,7 +252,6 @@ fn main() {
                 let results = apis.iter().map(|api| {
                     api.get_authenticated_api()
                         .and_then(|auth_api| auth_api.list_get_domains(&list))
-                        .map_err(|e| format!("{:?}", e))
                 });
                 display(results, &opts.hosts, opts.json)
             }
@@ -239,7 +259,6 @@ fn main() {
                 let results = apis.iter().map(|api| {
                     api.get_authenticated_api()
                         .and_then(|auth_api| auth_api.list_add(&domain, &list))
-                        .map_err(|e| format!("{:?}", e))
                 });
                 display(results, &opts.hosts, opts.json)
             }
@@ -247,34 +266,30 @@ fn main() {
                 let results = apis.iter().map(|api| {
                     api.get_authenticated_api()
                         .and_then(|auth_api| auth_api.list_remove(&domain, &list))
-                        .map_err(|e| format!("{:?}", e))
                 });
                 display(results, &opts.hosts, opts.json)
             }
         },
 
-        Commands::DNS { command } => match command {
-            DNSCommands::Show => {
+        Commands::Dns { command } => match command {
+            DnsCommands::Show => {
                 let results = apis.iter().map(|api| {
                     api.get_authenticated_api()
                         .and_then(|auth_api| auth_api.get_custom_dns_records())
-                        .map_err(|e| format!("{:?}", e))
                 });
                 display(results, &opts.hosts, opts.json)
             }
-            DNSCommands::Add { ip, domain } => {
+            DnsCommands::Add { ip, domain } => {
                 let results = apis.iter().map(|api| {
                     api.get_authenticated_api()
                         .and_then(|auth_api| auth_api.add_custom_dns_record(ip, &domain))
-                        .map_err(|e| format!("{:?}", e))
                 });
                 display(results, &opts.hosts, opts.json)
             }
-            DNSCommands::Remove { ip, domain } => {
+            DnsCommands::Remove { ip, domain } => {
                 let results = apis.iter().map(|api| {
                     api.get_authenticated_api()
                         .and_then(|auth_api| auth_api.delete_custom_dns_record(ip, &domain))
-                        .map_err(|e| format!("{:?}", e))
                 });
                 display(results, &opts.hosts, opts.json)
             }
@@ -285,7 +300,6 @@ fn main() {
                 let results = apis.iter().map(|api| {
                     api.get_authenticated_api()
                         .and_then(|auth_api| auth_api.get_custom_cname_records())
-                        .map_err(|e| format!("{:?}", e))
                 });
                 display(results, &opts.hosts, opts.json)
             }
@@ -294,11 +308,9 @@ fn main() {
                 target_domain,
             } => {
                 let results = apis.iter().map(|api| {
-                    api.get_authenticated_api()
-                        .and_then(|auth_api| {
-                            auth_api.add_custom_cname_record(&domain, &target_domain)
-                        })
-                        .map_err(|e| format!("{:?}", e))
+                    api.get_authenticated_api().and_then(|auth_api| {
+                        auth_api.add_custom_cname_record(&domain, &target_domain)
+                    })
                 });
                 display(results, &opts.hosts, opts.json)
             }
@@ -307,11 +319,9 @@ fn main() {
                 target_domain,
             } => {
                 let results = apis.iter().map(|api| {
-                    api.get_authenticated_api()
-                        .and_then(|auth_api| {
-                            auth_api.delete_custom_cname_record(&domain, &target_domain)
-                        })
-                        .map_err(|e| format!("{:?}", e))
+                    api.get_authenticated_api().and_then(|auth_api| {
+                        auth_api.delete_custom_cname_record(&domain, &target_domain)
+                    })
                 });
                 display(results, &opts.hosts, opts.json)
             }
@@ -321,7 +331,7 @@ fn main() {
             let results = apis.iter().map(|api| {
                 api.get_authenticated_api()
                     .and_then(|auth_api| auth_api.get_max_logage())
-                    .map_err(|e| format!("{:?}", e))
+                    .map(LogageWrapper)
             });
             display(results, &opts.hosts, opts.json)
         }
