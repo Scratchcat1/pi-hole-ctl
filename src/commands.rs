@@ -18,7 +18,7 @@ pub struct PiHoleCtlOptions {
     #[clap(short, long)]
     pub json: bool,
 
-    /// Pairs of hosts/keys
+    /// Hosts to manage
     #[clap(long)]
     pub hosts: Vec<String>,
 
@@ -26,6 +26,7 @@ pub struct PiHoleCtlOptions {
     #[clap(short, long)]
     pub config_file_path: Option<PathBuf>,
 
+    /// API key for a pihole instance. Anything with a length < 10 is considered no key.
     #[clap(long)]
     pub keys: Vec<String>,
 

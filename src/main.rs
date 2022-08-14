@@ -77,7 +77,7 @@ fn main() {
     }
 
     // Load config and extend hosts and keys
-    let config = config::get_config_file(&opts.config_file_path);
+    let config = config::get_config_file(&opts.config_file_path, opts.verbose);
     for HostKeyPair { host, key } in config.hosts {
         opts.hosts.push(host.clone());
         opts.keys.push(key.clone().unwrap_or_default());

@@ -1,5 +1,5 @@
 [package]
-name = "pi-hole-ctl"
+name = "piholectl"
 version = "0.1.0"
 edition = "2021"
 

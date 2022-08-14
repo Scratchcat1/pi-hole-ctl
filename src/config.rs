@@ -14,13 +14,17 @@ pub struct HostKeyPair {
     pub key: Option<String>,
 }
 
-pub fn get_config_file(override_path: &Option<PathBuf>) -> PiHoleCtlConfig {
+pub fn get_config_file(override_path: &Option<PathBuf>, verbose: bool) -> PiHoleCtlConfig {
     // Use the override path instead of the default config if set
     let project_paths = ProjectDirs::from("com", "scratchcat1", "piholectl")
         .expect("Unable to determine the default config location");
     let mut default_config_path = project_paths.config_dir().to_path_buf();
     default_config_path.push("config.json");
     let config_file_path = override_path.clone().unwrap_or(default_config_path);
+
+    if verbose {
+        println!("Using configuration path {}", config_file_path.display());
+    }
 
     let f = File::open(config_file_path);
 
