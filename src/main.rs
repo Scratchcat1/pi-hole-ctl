@@ -101,7 +101,7 @@ fn main() {
         })
         .collect();
 
-    match opts.command {
+    match &opts.command {
         Commands::Enable => {
             let results = apis.iter().map(|api| {
                 api.get_authenticated_api()
@@ -184,7 +184,7 @@ fn main() {
         Commands::ForwardDestinations { unsorted } => {
             let results = apis.iter().map(|api| {
                 api.get_authenticated_api()
-                    .and_then(|auth_api| auth_api.get_forward_destinations(unsorted))
+                    .and_then(|auth_api| auth_api.get_forward_destinations(*unsorted))
             });
             display(results, &opts.hosts, opts.json)
         }
@@ -200,7 +200,7 @@ fn main() {
         Commands::AllQueries { count } => {
             let results = apis.iter().map(|api| {
                 api.get_authenticated_api()
-                    .and_then(|auth_api| auth_api.get_all_queries(count))
+                    .and_then(|auth_api| auth_api.get_all_queries(*count))
             });
             display(results, &opts.hosts, opts.json)
         }
