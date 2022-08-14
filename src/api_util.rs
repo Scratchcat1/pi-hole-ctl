@@ -8,13 +8,23 @@ pub enum PiHoleConfigImplementation {
     WithKey(PiHoleAPIConfigWithKey),
 }
 
+impl Into<PiHoleConfigImplementation> for PiHoleAPIConfig {
+    fn into(self) -> PiHoleConfigImplementation {
+        PiHoleConfigImplementation::Default(self)
+    }
+}
+
+impl Into<PiHoleConfigImplementation> for PiHoleAPIConfigWithKey {
+    fn into(self) -> PiHoleConfigImplementation {
+        PiHoleConfigImplementation::WithKey(self)
+    }
+}
+
 impl PiHoleConfigImplementation {
     pub fn new(host: String, api_key: Option<String>) -> Self {
         match api_key {
-            Some(key) => {
-                PiHoleConfigImplementation::WithKey(PiHoleAPIConfigWithKey::new(host, key))
-            }
-            None => PiHoleConfigImplementation::Default(PiHoleAPIConfig::new(host)),
+            Some(key) => PiHoleAPIConfigWithKey::new(host, key).into(),
+            None => PiHoleAPIConfig::new(host).into(),
         }
     }
 
