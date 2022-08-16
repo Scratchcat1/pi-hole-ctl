@@ -176,7 +176,7 @@ fn main() {
         Commands::TopClientsBlocked { count } => {
             let results = apis.iter().map(|api| {
                 api.get_authenticated_api()
-                    .and_then(|auth_api| auth_api.get_top_clients_blocked(count))
+                    .and_then(|auth_api| auth_api.get_top_clients_blocked(*count))
             });
             display(results, &opts.hosts, opts.json)
         }
