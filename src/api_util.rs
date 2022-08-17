@@ -47,54 +47,6 @@ impl PiHoleConfigImplementation {
     }
 }
 
-/// Applies the function to each api which can provide an authenticated API
-/// Unauthenticated APIs are replaced with `APIError::MissingAPIKey` errors
-pub fn map_authenticated_apis<F, T>(
-    apis: &[PiHoleConfigImplementation],
-    func: F,
-) -> Vec<Result<T, APIError>>
-where
-    F: Fn(&dyn AuthenticatedPiHoleAPI) -> Result<T, APIError>,
-{
-    apis.iter()
-        .map(|api| api.get_authenticated_api().and_then(&func))
-        .collect()
-}
-
-/// Applies the function to each api
-pub fn map_unauthenticated_apis<F, T>(
-    apis: &[PiHoleConfigImplementation],
-    func: F,
-) -> Vec<Result<T, APIError>>
-where
-    F: Fn(&dyn UnauthenticatedPiHoleAPI) -> Result<T, APIError>,
-{
-    apis.iter()
-        .map(|api| api.get_unauthenticated_api())
-        .map(&func)
-        .collect()
-}
-
-/// Applies the function to an api which can provide an authenticated API
-/// Unauthenticated APIs are replaced with `APIError::MissingAPIKey` errors
-pub fn map_authenticated_api<F, T>(api: &PiHoleConfigImplementation, func: F) -> Result<T, APIError>
-where
-    F: Fn(&dyn AuthenticatedPiHoleAPI) -> Result<T, APIError>,
-{
-    api.get_authenticated_api().and_then(&func)
-}
-
-/// Applies the function to an api
-pub fn map_unauthenticated_api<F, T>(
-    api: &PiHoleConfigImplementation,
-    func: F,
-) -> Result<T, APIError>
-where
-    F: Fn(&dyn UnauthenticatedPiHoleAPI) -> Result<T, APIError>,
-{
-    func(api.get_unauthenticated_api())
-}
-
 #[derive(Debug, Serialize)]
 pub enum APIResult {
     AllQueries(Vec<Query>),

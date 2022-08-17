@@ -39,6 +39,7 @@ where
         // println!("{}", serialised_yaml);
     } else {
         let results: Vec<Result<R, APIError>> = results.collect();
+        // Separate out the errors
         let errors = hosts
             .iter()
             .zip(&results)
@@ -48,17 +49,16 @@ where
             })
             .map(|(host, error)| format!("{}: {:?}", host.as_ref(), error))
             .collect::<Vec<String>>();
-        let rows = hosts
+
+        // Construct table rows from hosts and associated results
+        let table_rows: Vec<Vec<CellStruct>> = hosts
             .iter()
             .zip(results)
             .filter_map(|(host, result)| match result {
-                Ok(ok) => Some((host.as_ref().to_owned(), ok)),
+                Ok(ok) => Some((host, ok)),
                 Err(_) => None,
             })
-            .collect::<Vec<(String, R)>>();
-        let table_rows: Vec<_> = rows
-            .into_iter()
-            .flat_map(|(host, response_data)| response_data.to_table_rows(&host))
+            .flat_map(|(host, response_data)| response_data.to_table_rows(host.as_ref()))
             .collect();
         let table = table_rows.table().title(title);
         println!("{}", table.display().unwrap());

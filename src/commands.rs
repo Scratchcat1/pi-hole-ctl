@@ -1,5 +1,5 @@
 use crate::api_type_wrappers::*;
-use crate::api_util::{self, APIResult, CallApi, PiHoleConfigImplementation};
+use crate::api_util::{APIResult, CallApi, PiHoleConfigImplementation};
 use crate::table::{ToTableTitle, ToTableTitleDynamic};
 use clap::{Parser, Subcommand};
 use cli_table::CellStruct;
@@ -133,130 +133,131 @@ pub enum ApiCommands {
 impl CallApi for ApiCommands {
     fn call(&self, api: &PiHoleConfigImplementation) -> Result<APIResult, APIError> {
         match self {
-            Self::Enable => {
-                api_util::map_authenticated_api(api, |auth_api| auth_api.enable().map(|a| a.into()))
-            }
-            Self::Disable { duration } => api_util::map_authenticated_api(api, |auth_api| {
-                auth_api.disable(duration.as_secs()).map(|a| a.into())
-            }),
-            Self::Summary => api_util::map_unauthenticated_api(api, |unauth_api| {
-                unauth_api.get_summary().map(|a| a.into())
-            }),
-            Self::SummaryRaw => api_util::map_unauthenticated_api(api, |unauth_api| {
-                unauth_api.get_summary_raw().map(|a| a.into())
-            }),
-            Self::OverTime10Min => api_util::map_unauthenticated_api(api, |unauth_api| {
-                unauth_api.get_over_time_data_10_mins().map(|a| a.into())
-            }),
-            Self::Version => api_util::map_unauthenticated_api(api, |unauth_api| {
-                unauth_api
-                    .get_version()
-                    .map(VersionWrapper)
-                    .map(|a| a.into())
-            }),
-            Self::Versions => api_util::map_unauthenticated_api(api, |unauth_api| {
-                unauth_api.get_versions().map(|a| a.into())
-            }),
-            Self::TopItems { count } => api_util::map_authenticated_api(api, |auth_api| {
-                auth_api.get_top_items(count).map(|a| a.into())
-            }),
-            Self::TopClients { count } => api_util::map_authenticated_api(api, |auth_api| {
-                auth_api.get_top_clients(count).map(|a| a.into())
-            }),
-            Self::TopClientsBlocked { count } => api_util::map_authenticated_api(api, |auth_api| {
-                auth_api.get_top_clients_blocked(*count).map(|a| a.into())
-            }),
-            Self::ForwardDestinations { unsorted } => {
-                api_util::map_authenticated_api(api, |auth_api| {
-                    auth_api
-                        .get_forward_destinations(*unsorted)
-                        .map(|a| a.into())
-                })
-            }
-            Self::QueryTypes => api_util::map_authenticated_api(api, |auth_api| {
-                auth_api.get_query_types().map(|a| a.into())
-            }),
-            Self::AllQueries { count } => api_util::map_authenticated_api(api, |auth_api| {
-                auth_api.get_all_queries(*count).map(|a| a.into())
-            }),
-            Self::Cache => api_util::map_authenticated_api(api, |auth_api| {
-                auth_api.get_cache_info().map(|a| a.into())
-            }),
-            Self::ClientNames => api_util::map_authenticated_api(api, |auth_api| {
-                auth_api.get_client_names().map(|a| a.into())
-            }),
-            Self::OverTimeDataClients => api_util::map_authenticated_api(api, |auth_api| {
-                auth_api
-                    .get_over_time_data_clients()
-                    .map(OverTimeDataClientsWrapper)
-                    .map(|a| a.into())
-            }),
-            Self::Network => api_util::map_authenticated_api(&api, |auth_api| {
-                auth_api.get_network().map(|a| a.into())
-            }),
-            Self::QueriesCount => api_util::map_authenticated_api(&api, |auth_api| {
-                auth_api
-                    .get_queries_count()
-                    .map(QueriesCountWrapper)
-                    .map(|a| a.into())
-            }),
+            Self::Enable => api.get_authenticated_api()?.enable().map(|a| a.into()),
+            Self::Disable { duration } => api
+                .get_authenticated_api()?
+                .disable(duration.as_secs())
+                .map(|a| a.into()),
+            Self::Summary => api
+                .get_unauthenticated_api()
+                .get_summary()
+                .map(|a| a.into()),
+
+            Self::SummaryRaw => api
+                .get_unauthenticated_api()
+                .get_summary_raw()
+                .map(|a| a.into()),
+
+            Self::OverTime10Min => api
+                .get_unauthenticated_api()
+                .get_over_time_data_10_mins()
+                .map(|a| a.into()),
+
+            Self::Version => api
+                .get_unauthenticated_api()
+                .get_version()
+                .map(VersionWrapper)
+                .map(|a| a.into()),
+            Self::Versions => api
+                .get_unauthenticated_api()
+                .get_versions()
+                .map(|a| a.into()),
+            Self::TopItems { count } => api
+                .get_authenticated_api()?
+                .get_top_items(count)
+                .map(|a| a.into()),
+            Self::TopClients { count } => api
+                .get_authenticated_api()?
+                .get_top_clients(count)
+                .map(|a| a.into()),
+            Self::TopClientsBlocked { count } => api
+                .get_authenticated_api()?
+                .get_top_clients_blocked(*count)
+                .map(|a| a.into()),
+            Self::ForwardDestinations { unsorted } => api
+                .get_authenticated_api()?
+                .get_forward_destinations(*unsorted)
+                .map(|a| a.into()),
+            Self::QueryTypes => api
+                .get_authenticated_api()?
+                .get_query_types()
+                .map(|a| a.into()),
+            Self::AllQueries { count } => api
+                .get_authenticated_api()?
+                .get_all_queries(*count)
+                .map(|a| a.into()),
+            Self::Cache => api
+                .get_authenticated_api()?
+                .get_cache_info()
+                .map(|a| a.into()),
+            Self::ClientNames => api
+                .get_authenticated_api()?
+                .get_client_names()
+                .map(|a| a.into()),
+            Self::OverTimeDataClients => api
+                .get_authenticated_api()?
+                .get_over_time_data_clients()
+                .map(OverTimeDataClientsWrapper)
+                .map(|a| a.into()),
+            Self::Network => api.get_authenticated_api()?.get_network().map(|a| a.into()),
+            Self::QueriesCount => api
+                .get_authenticated_api()?
+                .get_queries_count()
+                .map(QueriesCountWrapper)
+                .map(|a| a.into()),
             Self::List { list, command } => match command {
-                ListCommands::Show => api_util::map_authenticated_api(&api, |auth_api| {
-                    auth_api.list_get_domains(list).map(|a| a.into())
-                }),
-                ListCommands::Add { domain } => api_util::map_authenticated_api(&api, |auth_api| {
-                    auth_api.list_add(domain, list).map(|a| a.into())
-                }),
-                ListCommands::Remove { domain } => {
-                    api_util::map_authenticated_api(&api, |auth_api| {
-                        auth_api.list_remove(domain, list).map(|a| a.into())
-                    })
-                }
+                ListCommands::Show => api
+                    .get_authenticated_api()?
+                    .list_get_domains(list)
+                    .map(|a| a.into()),
+                ListCommands::Add { domain } => api
+                    .get_authenticated_api()?
+                    .list_add(domain, list)
+                    .map(|a| a.into()),
+                ListCommands::Remove { domain } => api
+                    .get_authenticated_api()?
+                    .list_remove(domain, list)
+                    .map(|a| a.into()),
             },
             Self::Dns { command } => match command {
-                DnsCommands::Show => api_util::map_authenticated_api(&api, |auth_api| {
-                    auth_api.get_custom_dns_records().map(|a| a.into())
-                }),
-                DnsCommands::Add { ip, domain } => {
-                    api_util::map_authenticated_api(&api, |auth_api| {
-                        auth_api.add_custom_dns_record(ip, domain).map(|a| a.into())
-                    })
-                }
-                DnsCommands::Remove { ip, domain } => {
-                    api_util::map_authenticated_api(&api, |auth_api| {
-                        auth_api
-                            .delete_custom_dns_record(ip, domain)
-                            .map(|a| a.into())
-                    })
-                }
+                DnsCommands::Show => api
+                    .get_authenticated_api()?
+                    .get_custom_dns_records()
+                    .map(|a| a.into()),
+                DnsCommands::Add { ip, domain } => api
+                    .get_authenticated_api()?
+                    .add_custom_dns_record(ip, domain)
+                    .map(|a| a.into()),
+                DnsCommands::Remove { ip, domain } => api
+                    .get_authenticated_api()?
+                    .delete_custom_dns_record(ip, domain)
+                    .map(|a| a.into()),
             },
             Self::Cname { command } => match command {
-                CnameCommands::Show => api_util::map_authenticated_api(&api, |auth_api| {
-                    auth_api.get_custom_cname_records().map(|a| a.into())
-                }),
+                CnameCommands::Show => api
+                    .get_authenticated_api()?
+                    .get_custom_cname_records()
+                    .map(|a| a.into()),
                 CnameCommands::Add {
                     domain,
                     target_domain,
-                } => api_util::map_authenticated_api(&api, |auth_api| {
-                    auth_api
-                        .add_custom_cname_record(domain, target_domain)
-                        .map(|a| a.into())
-                }),
+                } => api
+                    .get_authenticated_api()?
+                    .add_custom_cname_record(domain, target_domain)
+                    .map(|a| a.into()),
                 CnameCommands::Remove {
                     domain,
                     target_domain,
-                } => api_util::map_authenticated_api(&api, |auth_api| {
-                    auth_api
-                        .delete_custom_cname_record(domain, target_domain)
-                        .map(|a| a.into())
-                }),
+                } => api
+                    .get_authenticated_api()?
+                    .delete_custom_cname_record(domain, target_domain)
+                    .map(|a| a.into()),
             },
-            Self::Logage => api_util::map_authenticated_api(&api, |auth_api| {
-                auth_api
-                    .get_max_logage()
-                    .map(LogageWrapper)
-                    .map(|a| a.into())
-            }),
+            Self::Logage => api
+                .get_authenticated_api()?
+                .get_max_logage()
+                .map(LogageWrapper)
+                .map(|a| a.into()),
         }
     }
 }
