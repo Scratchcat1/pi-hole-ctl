@@ -1,6 +1,6 @@
 use crate::api_type_wrappers::*;
-use crate::table::{ToTableRows, ToTableTitle};
-use cli_table::{Cell, CellStruct, Color, Style, Table, TableStruct};
+use crate::table::ToTableRows;
+use cli_table::CellStruct;
 use pi_hole_api::{
     api_types::*, errors::APIError, AuthenticatedPiHoleAPI, PiHoleAPIConfig,
     PiHoleAPIConfigWithKey, UnauthenticatedPiHoleAPI,
@@ -75,14 +75,34 @@ where
         .collect()
 }
 
+/// Applies the function to an api which can provide an authenticated API
+/// Unauthenticated APIs are replaced with `APIError::MissingAPIKey` errors
+pub fn map_authenticated_api<F, T>(api: &PiHoleConfigImplementation, func: F) -> Result<T, APIError>
+where
+    F: Fn(&dyn AuthenticatedPiHoleAPI) -> Result<T, APIError>,
+{
+    api.get_authenticated_api().and_then(&func)
+}
+
+/// Applies the function to an api
+pub fn map_unauthenticated_api<F, T>(
+    api: &PiHoleConfigImplementation,
+    func: F,
+) -> Result<T, APIError>
+where
+    F: Fn(&dyn UnauthenticatedPiHoleAPI) -> Result<T, APIError>,
+{
+    func(api.get_unauthenticated_api())
+}
+
 #[derive(Debug, Serialize)]
 pub enum APIResult {
-    AllQueries(AllQueries),
+    AllQueries(Vec<Query>),
     CacheInfo(CacheInfo),
-    ClientName(ClientName),
-    CustomCNAMERecord(CustomCNAMERecord),
-    CustomDNSRecord(CustomDNSRecord),
-    CustomListDomainDetails(CustomListDomainDetails),
+    ClientNames(Vec<ClientName>),
+    CustomCNAMERecords(Vec<CustomCNAMERecord>),
+    CustomDNSRecords(Vec<CustomDNSRecord>),
+    CustomListDomainDetailsList(Vec<CustomListDomainDetails>),
     ForwardDestinations(ForwardDestinations),
     ListModificationResponse(ListModificationResponse),
     Network(Network),
@@ -109,10 +129,10 @@ impl ToTableRows for APIResult {
         match self {
             Self::AllQueries(data) => data.to_table_rows(host),
             Self::CacheInfo(data) => data.to_table_rows(host),
-            Self::ClientName(data) => data.to_table_rows(host),
-            Self::CustomCNAMERecord(data) => data.to_table_rows(host),
-            Self::CustomDNSRecord(data) => data.to_table_rows(host),
-            Self::CustomListDomainDetails(data) => data.to_table_rows(host),
+            Self::ClientNames(data) => data.to_table_rows(host),
+            Self::CustomCNAMERecords(data) => data.to_table_rows(host),
+            Self::CustomDNSRecords(data) => data.to_table_rows(host),
+            Self::CustomListDomainDetailsList(data) => data.to_table_rows(host),
             Self::ForwardDestinations(data) => data.to_table_rows(host),
             Self::ListModificationResponse(data) => data.to_table_rows(host),
             Self::Network(data) => data.to_table_rows(host),
@@ -136,66 +156,41 @@ impl ToTableRows for APIResult {
     }
 }
 
-impl ToTableTitle for APIResult {
-    fn to_table_title() -> Vec<Vec<CellStruct>> {
-        match self {
-            Self::AllQueries => Self::AllQueries::to_table_title(),
-            Self::CacheInfo => Self::CacheInfo::to_table_title(),
-            Self::ClientName => Self::ClientName::to_table_title(),
-            Self::CustomCNAMERecord => Self::CustomCNAMERecord::to_table_title(),
-            Self::CustomDNSRecord => Self::CustomDNSRecord::to_table_title(),
-            Self::CustomListDomainDetails => Self::CustomListDomainDetails::to_table_title(),
-            Self::ForwardDestinations => Self::ForwardDestinations::to_table_title(),
-            Self::ListModificationResponse => Self::ListModificationResponse::to_table_title(),
-            Self::Network => Self::Network::to_table_title(),
-            Self::NetworkClient => Self::NetworkClient::to_table_title(),
-            Self::OverTimeData => Self::OverTimeData::to_table_title(),
-            Self::Query => Self::Query::to_table_title(),
-            Self::QueryTypes => Self::QueryTypes::to_table_title(),
-            Self::Status => Self::Status::to_table_title(),
-            Self::Summary => Self::Summary::to_table_title(),
-            Self::SummaryRaw => Self::SummaryRaw::to_table_title(),
-            Self::TopClients => Self::TopClients::to_table_title(),
-            Self::TopClientsBlocked => Self::TopClientsBlocked::to_table_title(),
-            Self::TopItems => Self::TopItems::to_table_title(),
-            Self::Version => Self::Version::to_table_title(),
-            Self::Versions => Self::Versions::to_table_title(),
-            Self::OverTimeDataClientsWrapper => Self::OverTimeDataClientsWrapper::to_table_title(),
-            Self::QueriesCountWrapper => Self::QueriesCountWrapper::to_table_title(),
-            Self::VersionWrapper => Self::VersionWrapper::to_table_title(),
-            Self::LogageWrapper => Self::LogageWrapper::to_table_title(),
-        }
-    }
-}
+// impl From<AllQueries> for APIResult {
+//     fn from(data: AllQueries) -> Self {
+//         APIResult::AllQueries(data)
+//     }
+// }
 
-impl From<AllQueries> for APIResult {
-    fn from(data: AllQueries) -> Self {
+impl From<Vec<Query>> for APIResult {
+    fn from(data: Vec<Query>) -> Self {
         APIResult::AllQueries(data)
     }
 }
+
 impl From<CacheInfo> for APIResult {
     fn from(data: CacheInfo) -> Self {
         APIResult::CacheInfo(data)
     }
 }
-impl From<ClientName> for APIResult {
-    fn from(data: ClientName) -> Self {
-        APIResult::ClientName(data)
+impl From<Vec<ClientName>> for APIResult {
+    fn from(data: Vec<ClientName>) -> Self {
+        APIResult::ClientNames(data)
     }
 }
-impl From<CustomCNAMERecord> for APIResult {
-    fn from(data: CustomCNAMERecord) -> Self {
-        APIResult::CustomCNAMERecord(data)
+impl From<Vec<CustomCNAMERecord>> for APIResult {
+    fn from(data: Vec<CustomCNAMERecord>) -> Self {
+        APIResult::CustomCNAMERecords(data)
     }
 }
-impl From<CustomDNSRecord> for APIResult {
-    fn from(data: CustomDNSRecord) -> Self {
-        APIResult::CustomDNSRecord(data)
+impl From<Vec<CustomDNSRecord>> for APIResult {
+    fn from(data: Vec<CustomDNSRecord>) -> Self {
+        APIResult::CustomDNSRecords(data)
     }
 }
-impl From<CustomListDomainDetails> for APIResult {
-    fn from(data: CustomListDomainDetails) -> Self {
-        APIResult::CustomListDomainDetails(data)
+impl From<Vec<CustomListDomainDetails>> for APIResult {
+    fn from(data: Vec<CustomListDomainDetails>) -> Self {
+        APIResult::CustomListDomainDetailsList(data)
     }
 }
 impl From<ForwardDestinations> for APIResult {
@@ -294,8 +289,6 @@ impl From<LogageWrapper> for APIResult {
     }
 }
 
-impl ToTableTitle for APIResult {
-    fn to_table_title() -> Vec<CellStruct> {
-        vec!["Host".cell(), "count".cell()]
-    }
+pub trait CallApi {
+    fn call(&self, api: &PiHoleConfigImplementation) -> Result<APIResult, APIError>;
 }

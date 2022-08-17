@@ -304,6 +304,10 @@ fn string_status_to_colored_cell(status: &str) -> CellStruct {
     status.cell().foreground_color(Some(color))
 }
 
+pub trait ToTableTitleDynamic {
+    fn to_table_title(&self) -> Vec<CellStruct>;
+}
+
 pub trait ToTableTitle {
     fn to_table_title() -> Vec<CellStruct>;
 }

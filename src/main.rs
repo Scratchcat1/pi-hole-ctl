@@ -3,20 +3,20 @@ mod api_util;
 mod commands;
 mod config;
 mod table;
-use crate::api_type_wrappers::*;
-use crate::api_util::PiHoleConfigImplementation;
+use crate::api_util::{CallApi, PiHoleConfigImplementation};
 use crate::config::HostKeyPair;
-use crate::table::{ToTable, ToTableRows, ToTableTitle};
+use crate::table::{ToTableRows, ToTableTitleDynamic};
 use clap::Parser;
-use commands::{CnameCommands, Commands, DnsCommands, ListCommands, PiHoleCtlOptions};
+use cli_table::{CellStruct, Table};
+use commands::{Commands, PiHoleCtlOptions};
 use pi_hole_api::errors::APIError;
 use serde::Serialize;
 use std::collections::HashMap;
 
-fn display<I, H, R>(results: I, hosts: &[H], json: bool)
+fn display<I, H, R>(results: I, title: Vec<CellStruct>, hosts: &[H], json: bool)
 where
     I: Iterator<Item = Result<R, APIError>>,
-    R: std::fmt::Debug + Serialize + ToTableRows + ToTableTitle,
+    R: std::fmt::Debug + Serialize + ToTableRows,
     H: AsRef<str>,
 {
     if json {
@@ -48,7 +48,7 @@ where
             })
             .map(|(host, error)| format!("{}: {:?}", host.as_ref(), error))
             .collect::<Vec<String>>();
-        let table_rows = hosts
+        let rows = hosts
             .iter()
             .zip(results)
             .filter_map(|(host, result)| match result {
@@ -56,7 +56,12 @@ where
                 Err(_) => None,
             })
             .collect::<Vec<(String, R)>>();
-        println!("{}", table_rows.to_table().display().unwrap());
+        let table_rows: Vec<_> = rows
+            .into_iter()
+            .flat_map(|(host, response_data)| response_data.to_table_rows(&host))
+            .collect();
+        let table = table_rows.table().title(title);
+        println!("{}", table.display().unwrap());
 
         if !errors.is_empty() {
             println!("Errors:");
@@ -100,194 +105,10 @@ fn main() {
         .collect();
 
     match &opts.command {
-        Commands::Enable => {
-            let results = api_util::map_authenticated_apis(&apis, |auth_api| auth_api.enable());
-            display(results.into_iter(), &opts.hosts, opts.json)
-        }
-        Commands::Disable { duration } => {
-            let results = api_util::map_authenticated_apis(&apis, |auth_api| {
-                auth_api.disable(duration.as_secs())
-            });
-            display(results.into_iter(), &opts.hosts, opts.json)
-        }
-        Commands::Summary => {
-            let results =
-                api_util::map_unauthenticated_apis(&apis, |unauth_api| unauth_api.get_summary());
-            display(results.into_iter(), &opts.hosts, opts.json)
-        }
-
-        Commands::SummaryRaw => {
-            let results = api_util::map_unauthenticated_apis(&apis, |unauth_api| {
-                unauth_api.get_summary_raw()
-            });
-            display(results.into_iter(), &opts.hosts, opts.json)
-        }
-
-        Commands::OverTime10Min => {
-            let results = api_util::map_unauthenticated_apis(&apis, |unauth_api| {
-                unauth_api.get_over_time_data_10_mins()
-            });
-            display(results.into_iter(), &opts.hosts, opts.json)
-        }
-
-        Commands::Version => {
-            let results = api_util::map_unauthenticated_apis(&apis, |unauth_api| {
-                unauth_api.get_version().map(VersionWrapper)
-            });
-            display(results.into_iter(), &opts.hosts, opts.json)
-        }
-
-        Commands::Versions => {
-            let results =
-                api_util::map_unauthenticated_apis(&apis, |unauth_api| unauth_api.get_versions());
-            display(results.into_iter(), &opts.hosts, opts.json)
-        }
-
-        Commands::TopItems { count } => {
-            let results =
-                api_util::map_authenticated_apis(&apis, |auth_api| auth_api.get_top_items(count));
-            display(results.into_iter(), &opts.hosts, opts.json)
-        }
-
-        Commands::TopClients { count } => {
-            let results =
-                api_util::map_authenticated_apis(&apis, |auth_api| auth_api.get_top_clients(count));
-            display(results.into_iter(), &opts.hosts, opts.json)
-        }
-
-        Commands::TopClientsBlocked { count } => {
-            let results = api_util::map_authenticated_apis(&apis, |auth_api| {
-                auth_api.get_top_clients_blocked(*count)
-            });
-            display(results.into_iter(), &opts.hosts, opts.json)
-        }
-
-        Commands::ForwardDestinations { unsorted } => {
-            let results = api_util::map_authenticated_apis(&apis, |auth_api| {
-                auth_api.get_forward_destinations(*unsorted)
-            });
-            display(results.into_iter(), &opts.hosts, opts.json)
-        }
-
-        Commands::QueryTypes => {
-            let results =
-                api_util::map_authenticated_apis(&apis, |auth_api| auth_api.get_query_types());
-            display(results.into_iter(), &opts.hosts, opts.json)
-        }
-
-        Commands::AllQueries { count } => {
-            let results = api_util::map_authenticated_apis(&apis, |auth_api| {
-                auth_api.get_all_queries(*count)
-            });
-            display(results.into_iter(), &opts.hosts, opts.json)
-        }
-
-        Commands::Cache => {
-            let results =
-                api_util::map_authenticated_apis(&apis, |auth_api| auth_api.get_cache_info());
-            display(results.into_iter(), &opts.hosts, opts.json)
-        }
-        Commands::ClientNames => {
-            let results =
-                api_util::map_authenticated_apis(&apis, |auth_api| auth_api.get_client_names());
-            display(results.into_iter(), &opts.hosts, opts.json)
-        }
-        Commands::OverTimeDataClients => {
-            let results = api_util::map_authenticated_apis(&apis, |auth_api| {
-                auth_api
-                    .get_over_time_data_clients()
-                    .map(OverTimeDataClientsWrapper)
-            });
-            display(results.into_iter(), &opts.hosts, opts.json)
-        }
-
-        Commands::Network => {
-            let results =
-                api_util::map_authenticated_apis(&apis, |auth_api| auth_api.get_network());
-            display(results.into_iter(), &opts.hosts, opts.json)
-        }
-
-        Commands::QueriesCount => {
-            let results = api_util::map_authenticated_apis(&apis, |auth_api| {
-                auth_api.get_queries_count().map(QueriesCountWrapper)
-            });
-            display(results.into_iter(), &opts.hosts, opts.json)
-        }
-
-        Commands::List { list, command } => match command {
-            ListCommands::Show => {
-                let results = api_util::map_authenticated_apis(&apis, |auth_api| {
-                    auth_api.list_get_domains(list)
-                });
-                display(results.into_iter(), &opts.hosts, opts.json)
-            }
-            ListCommands::Add { domain } => {
-                let results = api_util::map_authenticated_apis(&apis, |auth_api| {
-                    auth_api.list_add(domain, list)
-                });
-                display(results.into_iter(), &opts.hosts, opts.json)
-            }
-            ListCommands::Remove { domain } => {
-                let results = api_util::map_authenticated_apis(&apis, |auth_api| {
-                    auth_api.list_remove(domain, list)
-                });
-                display(results.into_iter(), &opts.hosts, opts.json)
-            }
-        },
-
-        Commands::Dns { command } => match command {
-            DnsCommands::Show => {
-                let results = api_util::map_authenticated_apis(&apis, |auth_api| {
-                    auth_api.get_custom_dns_records()
-                });
-                display(results.into_iter(), &opts.hosts, opts.json)
-            }
-            DnsCommands::Add { ip, domain } => {
-                let results = api_util::map_authenticated_apis(&apis, |auth_api| {
-                    auth_api.add_custom_dns_record(ip, domain)
-                });
-                display(results.into_iter(), &opts.hosts, opts.json)
-            }
-            DnsCommands::Remove { ip, domain } => {
-                let results = api_util::map_authenticated_apis(&apis, |auth_api| {
-                    auth_api.delete_custom_dns_record(ip, domain)
-                });
-                display(results.into_iter(), &opts.hosts, opts.json)
-            }
-        },
-
-        Commands::Cname { command } => match command {
-            CnameCommands::Show => {
-                let results = api_util::map_authenticated_apis(&apis, |auth_api| {
-                    auth_api.get_custom_cname_records()
-                });
-                display(results.into_iter(), &opts.hosts, opts.json)
-            }
-            CnameCommands::Add {
-                domain,
-                target_domain,
-            } => {
-                let results = api_util::map_authenticated_apis(&apis, |auth_api| {
-                    auth_api.add_custom_cname_record(domain, target_domain)
-                });
-                display(results.into_iter(), &opts.hosts, opts.json)
-            }
-            CnameCommands::Remove {
-                domain,
-                target_domain,
-            } => {
-                let results = api_util::map_authenticated_apis(&apis, |auth_api| {
-                    auth_api.delete_custom_cname_record(domain, target_domain)
-                });
-                display(results.into_iter(), &opts.hosts, opts.json)
-            }
-        },
-
-        Commands::Logage => {
-            let results = api_util::map_authenticated_apis(&apis, |auth_api| {
-                auth_api.get_max_logage().map(LogageWrapper)
-            });
-            display(results.into_iter(), &opts.hosts, opts.json)
+        Commands::API { command } => {
+            let results = apis.iter().map(|api| command.call(api));
+            let title = command.to_table_title();
+            display(results, title, &opts.hosts, opts.json);
         }
     }
 }
