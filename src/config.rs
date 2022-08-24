@@ -1,14 +1,18 @@
 use directories::ProjectDirs;
 use serde::Deserialize;
+use std::collections::HashMap;
 use std::fs::File;
 use std::path::PathBuf;
 
-#[derive(Debug, Deserialize, Default)]
+#[derive(Debug, Deserialize, Default, Clone)]
 pub struct PiHoleCtlConfig {
-    pub hosts: Vec<HostKeyPair>,
+    /// Named HostKeyPair definitions for each Pi-Hole
+    pub hosts: HashMap<String, HostKeyPair>,
+    /// Named groups which map to named hosts defined in the `hosts` section
+    pub groups: HashMap<String, Vec<String>>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct HostKeyPair {
     pub host: String,
     pub key: Option<String>,

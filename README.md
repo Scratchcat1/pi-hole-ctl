@@ -5,7 +5,8 @@ Command line tool to manage Pi-Hole instances
 
 ```
 $ piholectl help
-piholectl 0.1.0
+piholectl 0.2.0
+Command line tool to manage Pi-Hole instances
 
 USAGE:
     piholectl [OPTIONS] <SUBCOMMAND>
@@ -13,6 +14,9 @@ USAGE:
 OPTIONS:
     -c, --config-file-path <CONFIG_FILE_PATH>
             Path to config file
+
+    -g, --groups <GROUPS>
+            Named groups to use from the config file
 
     -h, --help
             print help message
@@ -24,7 +28,7 @@ OPTIONS:
             Output as JSON
 
         --keys <KEYS>
-            API keys for a pihole instance. Anything with a length < 10 is considered no key
+            API key for a pihole instance. Anything with a length < 10 is considered no key
 
     -v, --verbose
             Be verbose
@@ -93,23 +97,73 @@ $ piholectl --hosts 'http://localhost' --keys <API Key> --hosts 'http://127.0.0.
 Errors:
 http://127.0.0.1: MissingAPIKey
 ```
-
+### Configuration
 A configuration file can store frequently used combinations, which will be queried **in addition** to any hosts specified in the command line options. By default the platform specific configuration file location is used. Running with `-v` or `--verbose` will output the searched path.  
-The JSON configuration file contains the list of hosts with optional keys.
+The JSON configuration file contains a list of named hosts with optional keys as well as groups. Groups contain a list of named hosts which will be queried. If no groups (multiple can be specified) are specified in the command line options, then the group named `default` is used.
 ```json
 {
-  "hosts": [
-    {
+  "hosts": {
+    "test_with_key": {
       "host": "http://localhost",
       "key": "<API KEY>"
     },
-    {
+    "test_no_key": {
       "host": "http://127.0.0.1"
     }
-  ]
+  },
+  "groups": {
+    "default": [
+      "test_with_key",
+      "test_no_key"
+    ],
+    "example_group": [
+      "test_no_key"
+    ]
+  }
 }
 ```
 
+For example with the above configuration file the following outputs are produced:
+```
+$ # no group is specified, "default" group is used
+$ piholectl enable
++------------------+---------+
+| Host             | status  |
++------------------+---------+
+| http://localhost | enabled |
++------------------+---------+
+
+Errors:
+http://127.0.0.1: MissingAPIKey
+```
+
+```
+$ # "example_group" group is specified so "default" group is not added automatically
+$ piholectl enable -g example_group
++------------------+---------+
+| Host             | status  |
++------------------+---------+
+| http://localhost | enabled |
++------------------+---------+
+
+Errors:
+http://127.0.0.1: MissingAPIKey
+```
+
+```
+# Group "example_group" is used in addition to the manually specified host
+$ piholectl -g example_group --hosts 'http://192.168.0.54' --keys none enable
++------+--------+
+| Host | status |
++------+--------+
+
+Errors:
+http://192.168.0.54: MissingAPIKey
+http://127.0.0.1: MissingAPIKey
+
+```
+
+### JSON Output
 The output can be set to be JSON using `-j` or `--json`:
 ```
 $ piholectl -j list black show
