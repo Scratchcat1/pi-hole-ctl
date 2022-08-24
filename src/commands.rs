@@ -27,26 +27,30 @@ pub struct PiHoleCtlOptions {
     #[clap(long)]
     pub hosts: Vec<String>,
 
-    /// Path to config file
-    #[clap(short, long)]
-    pub config_file_path: Option<PathBuf>,
-
     /// API key for a pihole instance. Anything with a length < 10 is considered no key.
     #[clap(long)]
     pub keys: Vec<String>,
 
+    /// Path to config file
+    #[clap(short, long)]
+    pub config_file_path: Option<PathBuf>,
+
+    /// Named groups to use from the config file
+    #[clap(short, long)]
+    pub groups: Vec<String>,
+
     #[clap(subcommand)]
-    pub command: Commands,
+    pub command: ApiCommands,
 }
 
-#[derive(Debug, Subcommand)]
-pub enum Commands {
-    /// Request to API
-    API {
-        #[clap(subcommand)]
-        command: ApiCommands,
-    },
-}
+// #[derive(Debug, Subcommand)]
+// pub enum Commands {
+//     /// Perform API request
+//     API {
+//         #[clap(subcommand)]
+//         command: ApiCommands,
+//     },
+// }
 
 #[derive(Debug, Subcommand)]
 pub enum ApiCommands {

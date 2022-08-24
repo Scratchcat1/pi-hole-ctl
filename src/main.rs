@@ -2,75 +2,13 @@ mod api_type_wrappers;
 mod api_util;
 mod commands;
 mod config;
+mod output;
 mod table;
 use crate::api_util::{CallApi, PiHoleConfigImplementation};
-use crate::config::HostKeyPair;
-use crate::table::{ToTableRows, ToTableTitleDynamic};
+use crate::table::ToTableTitleDynamic;
 use clap::Parser;
-use cli_table::{CellStruct, Table};
-use commands::{Commands, PiHoleCtlOptions};
-use pi_hole_api::errors::APIError;
-use serde::Serialize;
-use std::collections::HashMap;
-
-fn display<I, H, R>(results: I, title: Vec<CellStruct>, hosts: &[H], json: bool)
-where
-    I: Iterator<Item = Result<R, APIError>>,
-    R: std::fmt::Debug + Serialize + ToTableRows,
-    H: AsRef<str>,
-{
-    if json {
-        let map: HashMap<String, Result<R, String>> = hosts
-            .iter()
-            .zip(results)
-            .map(|(host, result)| {
-                (
-                    host.as_ref().to_owned(),
-                    result.map_err(|e| format!("{:?}", e)),
-                )
-            })
-            .collect();
-        let serialised_json =
-            serde_json::to_string_pretty(&map).expect("Unable to serialise results to JSON");
-        println!("{}", serialised_json);
-
-        // let serialised_yaml =
-        //     serde_yaml::to_string(&map).expect("Unable to serialise results to YAML");
-        // println!("{}", serialised_yaml);
-    } else {
-        let results: Vec<Result<R, APIError>> = results.collect();
-        // Separate out the errors
-        let errors = hosts
-            .iter()
-            .zip(&results)
-            .filter_map(|(host, result)| match result {
-                Ok(_) => None,
-                Err(e) => Some((host, e)),
-            })
-            .map(|(host, error)| format!("{}: {:?}", host.as_ref(), error))
-            .collect::<Vec<String>>();
-
-        // Construct table rows from hosts and associated results
-        let table_rows: Vec<Vec<CellStruct>> = hosts
-            .iter()
-            .zip(results)
-            .filter_map(|(host, result)| match result {
-                Ok(ok) => Some((host, ok)),
-                Err(_) => None,
-            })
-            .flat_map(|(host, response_data)| response_data.to_table_rows(host.as_ref()))
-            .collect();
-        let table = table_rows.table().title(title);
-        println!("{}", table.display().unwrap());
-
-        if !errors.is_empty() {
-            println!("Errors:");
-            for error in errors {
-                println!("{}", error);
-            }
-        }
-    }
-}
+use commands::PiHoleCtlOptions;
+use std::collections::HashSet;
 
 fn main() {
     // Parse the command line options
@@ -79,14 +17,58 @@ fn main() {
         println!("{:#?}", opts);
     }
 
+    // Throw an error if the hosts and keys are not the same length
+    if opts.hosts.len() != opts.keys.len() {
+        panic!(
+            "Hosts and keys lengths do not match ({} != {})",
+            opts.hosts.len(),
+            opts.keys.len()
+        );
+    }
+
     // Load config and extend hosts and keys
     let config = config::get_config_file(&opts.config_file_path, opts.verbose);
-    for HostKeyPair { host, key } in config.hosts {
-        opts.hosts.push(host.clone());
-        opts.keys.push(key.clone().unwrap_or_default());
+    let mut included_hosts = HashSet::new();
 
-        if opts.verbose {
-            println!("Adding host: {host} with key: {key:?}");
+    // Select the group named "default" if no group is explicitly provided
+    let default_groups = vec!["default".to_string()];
+    let selected_groups = if opts.groups.is_empty() {
+        &default_groups
+    } else {
+        &opts.groups
+    };
+    if opts.verbose {
+        println!("Selected groups: {:?}", selected_groups);
+    }
+
+    for group in selected_groups {
+        let named_hosts = config
+            .groups
+            .get(group)
+            .expect(&format!("Group '{}' not found", group));
+
+        for named_host in named_hosts {
+            // Only add each host once
+            if included_hosts.contains(named_host) {
+                continue;
+            }
+            included_hosts.insert(named_host);
+
+            let host_key_pair = config.hosts.get(named_host).expect(&format!(
+                "Named host {} not found for group {}",
+                named_host, group
+            ));
+
+            opts.hosts.push(host_key_pair.host.clone());
+            opts.keys
+                .push(host_key_pair.key.clone().unwrap_or_default());
+
+            if opts.verbose {
+                println!(
+                    "Adding host: {} with key: {:?}",
+                    host_key_pair.host, host_key_pair.key
+                );
+            }
         }
     }
 
@@ -104,11 +86,8 @@ fn main() {
         })
         .collect();
 
-    match &opts.command {
-        Commands::API { command } => {
-            let results = apis.iter().map(|api| command.call(api));
-            let title = command.to_table_title();
-            display(results, title, &opts.hosts, opts.json);
-        }
-    }
+    // Call the API and output the results
+    let results = apis.iter().map(|api| opts.command.call(api));
+    let title = opts.command.to_table_title();
+    crate::output::display(results, title, &opts.hosts, opts.json);
 }
